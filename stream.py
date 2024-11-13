@@ -383,7 +383,7 @@ if virus_file and astrocyte_file:
             st.plotly_chart(fig)
 
             buffer = BytesIO()
-            fig.write_image()(buffer, format='png')
+            fig.write_image(buffer, format='png')
             buffer.seek(0)
             fig_image = Image.open(buffer)
 
