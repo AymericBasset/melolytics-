@@ -4,3 +4,6 @@ numpy
 matplotlib
 pandas
 scikit-image
+scipy
+plotly
+Pillow
