@@ -52,22 +52,38 @@ if virus_file and astrocyte_file:
     area_threshold_astro = st.sidebar.slider(
         'Astrocytes - Area Threshold', 5000, 50000, 15000, step=1000)
 
-    # Preprocessing function
     def preprocess_image(binary_img, kernel_close_size, kernel_erode_size, area_threshold):
+        # Apply morphological operations
         kernel_close = np.ones(
             (kernel_close_size, kernel_close_size), np.uint8)
         closed_img = cv2.morphologyEx(
             binary_img, cv2.MORPH_CLOSE, kernel_close)
+
+        # Apply erosion to separate less dense regions
         kernel_erode = np.ones(
             (kernel_erode_size, kernel_erode_size), np.uint8)
         eroded_img = cv2.erode(closed_img, kernel_erode)
-        contours, _ = cv2.findContours(
-            eroded_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Find contours in the eroded image using RETR_TREE
+        contours, hierarchy = cv2.findContours(
+            eroded_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Create a mask from the contours
         mask = np.zeros_like(binary_img, dtype=np.uint8)
-        for contour in contours:
+
+        # Iterate over contours and use the hierarchy to determine the relationship between contours
+        for idx, contour in enumerate(contours):
+            # Check if the area is greater than the threshold
             if cv2.contourArea(contour) > area_threshold:
-                cv2.drawContours(mask, [contour], -1,
-                                 color=255, thickness=cv2.FILLED)
+                # Draw outer contour
+                if hierarchy[0][idx][3] == -1:  # Only draw if it's an external contour
+                    cv2.drawContours(
+                        mask, [contour], -1, color=255, thickness=cv2.FILLED)
+                else:
+                    # If the contour is a child (hole), draw it in black to "carve out" the hole
+                    cv2.drawContours(
+                        mask, [contour], -1, color=0, thickness=cv2.FILLED)
+
         return mask, contours
 
     # Preprocess virus and astrocyte images
