@@ -186,7 +186,7 @@ if virus_file and astrocyte_file:
 
             # Filter and draw rounded cell bodies
             for region in measure.regionprops(labels):
-                if region.area > 120:  # Filtering based on area
+                if region.area > 90:  # Filtering based on area
                     circularity = (4 * np.pi * region.area) / \
                         (region.perimeter ** 2)
                     if 0.3 < circularity <= 1.7:  # Filtering based on circularity
