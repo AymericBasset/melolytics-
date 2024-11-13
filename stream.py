@@ -141,7 +141,7 @@ if virus_file and astrocyte_file:
         zip_buffer.seek(0)
         return zip_buffer
 
-    if st.button('Download All Images'):
+    if st.button('Generate Zip Images for Maks'):
         # Create images for download
         images = {
             "virus_original.png": Image.fromarray(marker_img),
@@ -157,33 +157,165 @@ if virus_file and astrocyte_file:
             file_name="processed_images.zip",
             mime="application/zip"
         )
-
-    # Function to save density plots
-    def save_density_plots(fig, filename):
-        img_buffer = BytesIO()
-        fig.savefig(img_buffer, format='png')
-        img_buffer.seek(0)
-        return Image.open(img_buffer)
-
-    # Example plots for density analysis
+        # Button to estimate density and segmentation
     if st.sidebar.button('Estimate Density'):
-        # Placeholder density plot (replace with actual plots as needed)
-        fig, ax = plt.subplots()
-        ax.plot([0, 1], [0, 1])
-        st.pyplot(fig)
+        # Step 1: Segment the astrocyte bodies using the given function
+        def detect_and_segment_astrocyte_bodies(binary_image, original_image):
+            # NAME : astrocytes_of_interest.png
+            fig, axes = plt.subplots(1, 3, figsize=(36, 20))
 
-        # Save the plot for download
-        density_plot_image = save_density_plots(fig, "density_plot.png")
+            axes[0].imshow(original_image, cmap='gray')
+            axes[0].set_title('Original Image')
+            axes[0].axis('off')
 
-        # Button to download density plot
-        if st.button('Download Density Plot'):
+            axes[1].imshow(overlay_image)
+            axes[1].set_title('Overlay of Segmented Astrocyte Bodies')
+            axes[1].axis('off')
+
+            axes[2].imshow(segmented_mask, cmap='gray')
+            axes[2].set_title('Segmented Astrocyte Bodies')
+            axes[2].axis('off')
+
+            plt.tight_layout()
+
+            # Save figure to a BytesIO object
+            buffer = BytesIO()
+            plt.savefig(buffer, format='PNG')
+            buffer.seek(0)
+            fig_image = Image.open(buffer)
+
+            st.pyplot(fig)
+
+            return segmented_mask, fig_image
+
+        # Step 2: Segment astrocyte bodies
+        segmented_astrocytes, astrocytes_of_interest_img = detect_and_segment_astrocyte_bodies(
+            (cell_otsu > 0).astype(int), cell_img)
+
+        # Step 3: Plot the segmented image and centroids for visualization
+        def analyze_astrocyte_aggregation_knn(segmented_mask):
+            # NAME : segmented_astrocytes.png
+            fig, ax = plt.subplots(figsize=(8, 8))
+            ax.imshow(segmented_mask, cmap='gray')
+            ax.scatter(centroids[:, 1], centroids[:, 0],
+                       c='red', s=10, label='Centroids')
+            ax.set_title('Segmented Astrocyte Mask with Centroids')
+            ax.axis('off')
+            plt.legend()
+            plt.tight_layout()
+
+            # Save figure to a BytesIO object
+            buffer = BytesIO()
+            plt.savefig(buffer, format='PNG')
+            buffer.seek(0)
+            fig_image = Image.open(buffer)
+
+            st.pyplot(fig)
+
+            return features_df, fig_image
+
+        # Step 4: Analyze and plot astrocyte aggregation with centroids highlighted
+        features_df_knn, segmented_astrocytes_img = analyze_astrocyte_aggregation_knn(
+            segmented_astrocytes)
+
+        # Step 5: Analyze k-nearest neighbors density and display using Plotly
+        def analyze_astrocyte_aggregation_knn_density(segmented_mask):
+            # Step 4: Create subplots with Plotly to show both graphs side by side
+            # NAME : kde_and_distance_plot.png
+            fig = sp.make_subplots(rows=1, cols=2, subplot_titles=(
+                "Density Plot of Astrocytes", "Mean Distance vs. K-Value"))
+
+            # Step 5: Create the density plot for the astrocytes
+            if len(centroids) > 0:
+                x_coords = centroids[:, 1]
+                y_coords = centroids[:, 0]
+
+                # Add the density plot as a contour to the first subplot
+                density_trace = go.Histogram2dContour(
+                    x=x_coords,
+                    y=y_coords,
+                    colorscale=[[0, 'white'], [1, 'green']],
+                    reversescale=False,
+                    ncontours=20,
+                    showscale=False
+                )
+                fig.add_trace(density_trace, row=1, col=1)
+
+                # Fix axis limits to match original image size
+                fig.update_xaxes(
+                    range=[0, segmented_mask.shape[1]], row=1, col=1)
+                fig.update_yaxes(
+                    range=[segmented_mask.shape[0], 0], row=1, col=1, autorange=False)
+
+            # Step 6: Create the mean distance vs. k-value plot for the second subplot
+            mean_distance_trace = go.Scatter(
+                x=list(k_values),
+                y=knn_distances_mean,
+                mode='lines',
+                name='Mean Distance',
+                line=dict(color='blue')
+            )
+
+            std_upper = np.array(knn_distances_mean) + \
+                np.array(knn_distances_std)
+            std_lower = np.array(knn_distances_mean) - \
+                np.array(knn_distances_std)
+
+            # Add shaded area for standard deviation
+            std_shading = go.Scatter(
+                x=list(k_values) + list(k_values)[::-1],
+                y=list(std_upper) + list(std_lower)[::-1],
+                fill='toself',
+                fillcolor='rgba(0, 0, 255, 0.2)',
+                line=dict(color='rgba(255,255,255,0)'),
+                name='Standard Deviation'
+            )
+
+            fig.add_trace(std_shading, row=1, col=2)
+            fig.add_trace(mean_distance_trace, row=1, col=2)
+
+            # Step 7: Update layout and axes for better visualization
+            fig.update_layout(
+                title_text='Astrocyte Aggregation Analysis',
+                width=1000,
+                height=500,
+                plot_bgcolor='white'
+            )
+
+            fig.update_xaxes(title_text="X", row=1, col=1, showgrid=False)
+            fig.update_yaxes(title_text="Y", row=1, col=1, showgrid=False)
+
+            fig.update_xaxes(title_text="K-Value", row=1,
+                             col=2, showgrid=False)
+            fig.update_yaxes(
+                title_text="Mean Distance to K-Nearest Neighbors", row=1, col=2, showgrid=False)
+
+            st.plotly_chart(fig)
+
+            # Save Plotly figure as image
+            buffer = BytesIO()
+            fig.write_image(buffer, format='png')
+            buffer.seek(0)
+            fig_image = Image.open(buffer)
+
+            return features_df, fig_image
+
+        # Step 6: Analyze density and display the results
+        features_df_density, kde_and_distance_img = analyze_astrocyte_aggregation_knn_density(
+            segmented_astrocytes)
+        st.write(features_df_density)
+
+        # Button to generate a ZIP with all images
+        if st.button('Generate Zip Images for Density'):
             images = {
-                "density_plot.png": density_plot_image
+                "astrocytes_of_interest.png": astrocytes_of_interest_img,
+                "segmented_astrocytes.png": segmented_astrocytes_img,
+                "kde_and_distance_plot.png": kde_and_distance_img,
             }
             zip_buffer = create_zip(images)
             st.download_button(
-                label="Download Density Plot as ZIP",
+                label="Download All Images as ZIP",
                 data=zip_buffer,
-                file_name="density_plot.zip",
+                file_name="processed_images.zip",
                 mime="application/zip"
             )
