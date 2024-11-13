@@ -157,11 +157,39 @@ if virus_file and astrocyte_file:
             file_name="processed_images.zip",
             mime="application/zip"
         )
-        # Button to estimate density and segmentation
+    # Button to estimate density and segmentation
     if st.sidebar.button('Estimate Density'):
         # Step 1: Segment the astrocyte bodies using the given function
         def detect_and_segment_astrocyte_bodies(binary_image, original_image):
-            # NAME : astrocytes_of_interest.png
+            """
+            Detects and segments rounded astrocyte bodies from a binary image using skimage.
+            """
+            # Step 0: Convert the binary image to uint8
+            binary_image = (binary_image * 255).astype(np.uint8)
+
+            # Step 1: Distance Transform and Watershed Segmentation
+            distance = ndi.distance_transform_edt(binary_image)
+            local_maxi = morphology.local_maxima(distance)
+            markers = measure.label(local_maxi)
+            labels = watershed(-distance, markers, mask=binary_image)
+
+            # Create a mask for the segmented astrocyte bodies
+            segmented_mask = np.zeros_like(binary_image, dtype=np.uint8)
+
+            # Filter and draw rounded cell bodies
+            for region in measure.regionprops(labels):
+                if region.area > 120:  # Filtering based on area
+                    circularity = (4 * np.pi * region.area) / \
+                        (region.perimeter ** 2)
+                    if 0.3 < circularity <= 1.7:  # Filtering based on circularity
+                        segmented_mask[labels == region.label] = 255
+
+            # Step 2: Create an overlay of the segmented areas on the original image
+            overlay_image = cv2.cvtColor(original_image, cv2.COLOR_GRAY2BGR)
+            overlay_image[segmented_mask == 255] = [
+                0, 255, 0]  # Shade kept areas in green
+
+            # Step 3: Plot the original image with overlay and segmented mask
             fig, axes = plt.subplots(1, 3, figsize=(36, 20))
 
             axes[0].imshow(original_image, cmap='gray')
@@ -177,14 +205,12 @@ if virus_file and astrocyte_file:
             axes[2].axis('off')
 
             plt.tight_layout()
+            st.pyplot(fig)
 
-            # Save figure to a BytesIO object
             buffer = BytesIO()
-            plt.savefig(buffer, format='PNG')
+            fig.write_image(buffer, format='png')
             buffer.seek(0)
             fig_image = Image.open(buffer)
-
-            st.pyplot(fig)
 
             return segmented_mask, fig_image
 
@@ -194,7 +220,38 @@ if virus_file and astrocyte_file:
 
         # Step 3: Plot the segmented image and centroids for visualization
         def analyze_astrocyte_aggregation_knn(segmented_mask):
-            # NAME : segmented_astrocytes.png
+            """
+            Analyze the segmented astrocyte mask to extract features that describe
+            whether cells are agglomerating or spreading more evenly.
+            """
+            # Step 1: Extract properties of individual cells
+            labeled_mask = measure.label(segmented_mask)
+            regions = measure.regionprops(labeled_mask)
+
+            # Extract centroids of all detected cells
+            centroids = np.array([region.centroid for region in regions])
+
+            # Step 2: Calculate mean distance to k-nearest neighbors
+            k_values = [3, 5, 10, 20]
+            knn_distances = []
+
+            if len(centroids) > 1:
+                distances = distance.cdist(centroids, centroids)
+                np.fill_diagonal(distances, np.inf)  # Ignore distance to self
+
+                for k in k_values:
+                    knn_distances_k = np.sort(distances, axis=1)[:, :k].mean(
+                        axis=1)  # Mean distance to k nearest neighbors
+                    mean_knn_distance = np.mean(knn_distances_k)
+                    knn_distances.append(mean_knn_distance)
+
+            # Step 3: Create a DataFrame with the results
+            features_df = pd.DataFrame({
+                'K': k_values,
+                'Mean Distance to K-Nearest Neighbors': knn_distances
+            })
+
+            # Step 4: Plot the segmented image and centroids for visualization
             fig, ax = plt.subplots(figsize=(8, 8))
             ax.imshow(segmented_mask, cmap='gray')
             ax.scatter(centroids[:, 1], centroids[:, 0],
@@ -203,14 +260,12 @@ if virus_file and astrocyte_file:
             ax.axis('off')
             plt.legend()
             plt.tight_layout()
+            st.pyplot(fig)
 
-            # Save figure to a BytesIO object
             buffer = BytesIO()
-            plt.savefig(buffer, format='PNG')
+            fig.write_image(buffer, format='png')
             buffer.seek(0)
             fig_image = Image.open(buffer)
-
-            st.pyplot(fig)
 
             return features_df, fig_image
 
@@ -220,8 +275,42 @@ if virus_file and astrocyte_file:
 
         # Step 5: Analyze k-nearest neighbors density and display using Plotly
         def analyze_astrocyte_aggregation_knn_density(segmented_mask):
+            """
+            Analyze the segmented astrocyte mask to extract features that describe
+            whether cells are agglomerating or spreading more evenly.
+            """
+            # Step 1: Extract properties of individual cells
+            labeled_mask = measure.label(segmented_mask)
+            regions = measure.regionprops(labeled_mask)
+
+            # Extract centroids of all detected cells
+            centroids = np.array([region.centroid for region in regions])
+
+            # Step 2: Calculate mean distance to k-nearest neighbors
+            k_values = range(2, 11)
+            knn_distances_mean = []
+            knn_distances_std = []
+
+            if len(centroids) > 1:
+                distances = distance.cdist(centroids, centroids)
+                np.fill_diagonal(distances, np.inf)  # Ignore distance to self
+
+                for k in k_values:
+                    knn_distances_k = np.sort(distances, axis=1)[:, :k].mean(
+                        axis=1)  # Mean distance to k nearest neighbors
+                    mean_knn_distance = np.mean(knn_distances_k)
+                    std_knn_distance = np.std(knn_distances_k)
+                    knn_distances_mean.append(mean_knn_distance)
+                    knn_distances_std.append(std_knn_distance)
+
+            # Step 3: Create a DataFrame with the results
+            features_df = pd.DataFrame({
+                'K': k_values,
+                'Mean Distance to K-Nearest Neighbors': knn_distances_mean,
+                'Standard Deviation': knn_distances_std
+            })
+
             # Step 4: Create subplots with Plotly to show both graphs side by side
-            # NAME : kde_and_distance_plot.png
             fig = sp.make_subplots(rows=1, cols=2, subplot_titles=(
                 "Density Plot of Astrocytes", "Mean Distance vs. K-Value"))
 
@@ -234,6 +323,7 @@ if virus_file and astrocyte_file:
                 density_trace = go.Histogram2dContour(
                     x=x_coords,
                     y=y_coords,
+                    # Custom color scale: white to green
                     colorscale=[[0, 'white'], [1, 'green']],
                     reversescale=False,
                     ncontours=20,
@@ -292,7 +382,6 @@ if virus_file and astrocyte_file:
 
             st.plotly_chart(fig)
 
-            # Save Plotly figure as image
             buffer = BytesIO()
             fig.write_image(buffer, format='png')
             buffer.seek(0)
@@ -316,6 +405,6 @@ if virus_file and astrocyte_file:
             st.download_button(
                 label="Download All Images as ZIP",
                 data=zip_buffer,
-                file_name="processed_images.zip",
+                file_name="density_images.zip",
                 mime="application/zip"
             )
