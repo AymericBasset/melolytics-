@@ -394,17 +394,17 @@ if virus_file and astrocyte_file:
             segmented_astrocytes)
         st.write(features_df_density)
 
-        # Button to generate a ZIP with all images
-        if st.button('Generate Zip Images for Density'):
-            images = {
-                "astrocytes_of_interest.png": astrocytes_of_interest_img,
-                "segmented_astrocytes.png": segmented_astrocytes_img,
-                "kde_and_distance_plot.png": kde_and_distance_img,
-            }
-            zip_buffer = create_zip(images)
-            st.download_button(
-                label="Download All Images as ZIP",
-                data=zip_buffer,
-                file_name="density_images.zip",
-                mime="application/zip"
-            )
+    # Button to generate a ZIP with all images
+    if st.button("Generate Zip Images for Density --- only once you have calculated don't be silly"):
+        images = {
+            "astrocytes_of_interest.png": astrocytes_of_interest_img,
+            "segmented_astrocytes.png": segmented_astrocytes_img,
+            "kde_and_distance_plot.png": kde_and_distance_img,
+        }
+        zip_buffer = create_zip(images)
+        st.download_button(
+            label="Download All Images as ZIP",
+            data=zip_buffer,
+            file_name="density_images.zip",
+            mime="application/zip"
+        )
