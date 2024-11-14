@@ -163,7 +163,14 @@ if virus_file and astrocyte_file:
                   virus_mean_masked, astro_mean_masked, virus_to_astro_ratio_masked]
     }
     summary_df = pd.DataFrame(summary_data)
-    st.dataframe(summary_df)
+    with col1:
+        st.dataframe(summary_df)
+    with col2:
+        parameters = {
+            "Parameter": ["Virus - Closing Kernel Size", "Virus - Erosion Kernel Size", "Virus - Min Area Threshold", "Astrocytes - Closing Kernel Size", 'Astrocytes - Erosion Kernel Size', "Astrocytes - Min Area Threshold"],
+            "Value": [kernel_close_size_virus, kernel_erode_size_virus, area_threshold_virus, kernel_close_size_astro, kernel_erode_size_astro, area_threshold_astro]
+        }
+        st.dataframe(pd.DataFrame(parameters))
 
     # Button to download all pictures
     from PIL import Image
