@@ -125,6 +125,46 @@ if virus_file and astrocyte_file:
                  use_column_width=True)
         st.image(combined_mask, caption='Combined Mask', use_column_width=True)
 
+    # Calculate metrics
+    perimeter_virus = sum(cv2.arcLength(contour, True)
+                          for contour in contours_virus if cv2.contourArea(contour) > area_threshold_virus)
+    area_virus = sum(cv2.contourArea(contour)
+                     for contour in contours_virus if cv2.contourArea(contour) > area_threshold_virus)
+
+    perimeter_astro = sum(cv2.arcLength(contour, True)
+                          for contour in contours_astrocytes if cv2.contourArea(contour) > area_threshold_astro)
+    area_astro = sum(cv2.contourArea(contour)
+                     for contour in contours_astrocytes if cv2.contourArea(contour) > area_threshold_astro)
+
+    area_intersection = np.sum((virus_mask == 255) & (astrocyte_mask == 255))
+
+    virus_mean_all = (marker_otsu > 0).mean().round(4)*100
+    astro_mean_all = (cell_otsu > 0).mean().round(4)*100
+    virus_mean_all_to_astro_mean_all = (virus_mean_all/astro_mean_all).round(2)
+
+    # Masked pixel coverage stats
+    masked_marker_otsu = cv2.bitwise_and(
+        marker_otsu, marker_otsu, mask=virus_mask)
+    masked_cell_otsu = cv2.bitwise_and(cell_otsu, cell_otsu, mask=virus_mask)
+
+    virus_mean_masked = (masked_marker_otsu > 0).mean().round(4) * 100
+    astro_mean_masked = (masked_cell_otsu > 0).mean().round(4) * 100
+    virus_to_astro_ratio_masked = (
+        virus_mean_masked / astro_mean_masked).round(2)
+
+    # Summary Table
+    st.header("Summary of Analysis")
+    summary_data = {
+        "Metric": ["Virus Perimeter", "Virus Area", "Astrocytes Perimeter", "Astrocytes Area", "Intersection Area",
+                   "Virus Coverage (%)", "Astrocyte Coverage (%)", "Virus/Astrocyte Coverage Ratio",
+                   "Masked Virus Coverage (%)", "Masked Astrocyte Coverage (%)", "Masked Virus/Astrocyte Coverage Ratio"],
+        "Value": [perimeter_virus, area_virus, perimeter_astro, area_astro, area_intersection,
+                  virus_mean_all, astro_mean_all, virus_mean_all_to_astro_mean_all,
+                  virus_mean_masked, astro_mean_masked, virus_to_astro_ratio_masked]
+    }
+    summary_df = pd.DataFrame(summary_data)
+    st.dataframe(summary_df)
+
     # Button to download all pictures
     from PIL import Image
     from io import BytesIO
